@@ -20,25 +20,18 @@ on:
   push:
     branches:
       - master
+      - k8s-it-http-temp
 
 jobs:
   k8s-examples-http:
     runs-on: ubuntu-latest
-    if: (github.repository == 'apache/shenyu')
     steps:
       -
         uses: actions/checkout@v2
         with:
           submodules: true
       -
-        uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: '.github/filters.yml'
-          list-files: json
-      -
         name: Install k8s
-        if: steps.filter.outputs.changed == 'true'
         run: |
           curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE=777 sh -
           cat /etc/rancher/k3s/k3s.yaml
@@ -46,7 +39,6 @@ jobs:
           cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
       -
         name: Cache Maven Repos
-        if: steps.filter.outputs.changed == 'true'
         uses: actions/cache@v2
         with:
           path: ~/.m2/repository
@@ -55,20 +47,16 @@ jobs:
             ${{ runner.os }}-maven-
       -
         uses: actions/setup-java@v1
-        if: steps.filter.outputs.changed == 'true'
         with:
           java-version: 8
       -
         name: Build with Maven
-        if: steps.filter.outputs.changed == 'true'
         run: ./mvnw -B clean install -Prelease,docker -Dmaven.javadoc.skip=true -Dmaven.test.skip=true
       -
         name: Build examples
-        if: steps.filter.outputs.changed == 'true'
         run: ./mvnw -B clean install -Pexample -Dmaven.javadoc.skip=true -Dmaven.test.skip=true -f ./shenyu-examples/pom.xml
       -
         name: Build k8s Cluster
-        if: steps.filter.outputs.changed == 'true'
         run: |
           docker save apache/shenyu-admin:latest apache/shenyu-bootstrap:latest shenyu-examples-http:latest | sudo k3s ctr images import -
           kubectl apply -f ./shenyu-examples/shenyu-examples-http/k8s/shenyu-deployment.yml
@@ -77,12 +65,10 @@ jobs:
           kubectl apply -f ./shenyu-examples/shenyu-examples-http/k8s/shenyu-examples-http-service.yml
       -
         name: Wait for k8s Cluster Start up
-        if: steps.filter.outputs.changed == 'true'
         run: |
           bash ./shenyu-examples/shenyu-examples-http/script/healthcheck.sh
       -
         name: Cluster Test after Healthcheck
-        if: steps.filter.outputs.changed == 'true'
         run: |
           kubectl get all
           kubectl get events --all-namespaces
